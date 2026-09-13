@@ -51,6 +51,7 @@ desktop.ini
 
 sing-box/
 etc/
+techdocs/
 
 # Конфигурации не сохраняем
 *.yaml
