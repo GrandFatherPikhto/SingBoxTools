@@ -61,7 +61,7 @@ except ImportError:  # pragma: no cover - зависит от окружения
 
 DEFAULT_SETTINGS = "settings.yaml"
 
-ALLOWED_PROXY_TYPES = ("socks", "http")
+ALLOWED_PROXY_TYPES = ("socks", "http", "mixed")
 DEFAULT_EXCLUDE = ["🇷🇺"]
 
 SCRATCH_PORT = 54399
@@ -576,7 +576,7 @@ def pick_proxy(proxies, all_tags):
         tag = questionary.text("Тег нового прокси:").ask()
         if not tag:
             sys.exit("тег не может быть пустым")
-        ptype = questionary.select("Тип:", choices=["socks", "http"]).ask()
+        ptype = questionary.select("Тип:", choices=list(ALLOWED_PROXY_TYPES)).ask()
         port_str = questionary.text("Порт:").ask()
         try:
             port = int(port_str)

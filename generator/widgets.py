@@ -29,6 +29,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from ._backend import sbm
 from .validation import validate_non_empty, validate_proxy_candidate
 
 
@@ -109,7 +110,8 @@ class ProxyEditorPage(QWidget):
 
         self.tag_edit = QLineEdit()
         self.type_combo = QComboBox()
-        self.type_combo.addItems(["socks", "http"])
+        # Список типов берём из бэкенда — единственное место, где он задан.
+        self.type_combo.addItems(list(sbm.ALLOWED_PROXY_TYPES))
         self.port_spin = QSpinBox()
         self.port_spin.setRange(1, 65535)
 

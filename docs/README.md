@@ -56,7 +56,7 @@ outbounds  ───────────────────────
         │                                              │
         │  validate_proxies (proxies из YAML)          │
         ▼                                              ▼
-inbounds (socks/http) ──► pools (urltest) ──► route.rules ──► config.json
+inbounds (socks, http, mixed) ──► pools (urltest) ──► route.rules ──► config.json
 ```
 
 ### Плоский список серверов и два уровня выбора
@@ -195,7 +195,7 @@ sing-box check -c config.json && sudo systemctl restart sing-box
 
 1. **выбор прокси** — список `tag`-ов, у которых в `servers:` есть исчезнувшие
    теги, помечен `[!] нет в списке серверов: ...`; пункт `+ создать новый`
-   спрашивает тег, тип (`socks`/`http`) и порт;
+   спрашивает тег, тип (`socks`/`http`/`mixed`) и порт;
 2. **фильтр по подстроке** — `nether` оставляет только нидерландские ноды,
    Enter — показать все, Ctrl+C — закончить и оставить текущий выбор;
 3. **чекбоксы** — отметки *мержатся* с уже выбранным: из фильтрованного среза

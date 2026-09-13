@@ -45,9 +45,9 @@ dns:
   rules: []
   final: dns-local
 
-# Прокси для приложений: каждый = отдельный inbound (socks/http) со своим пулом.
+# Прокси для приложений: каждый = отдельный inbound (socks, http или mixed) со своим пулом.
 #   tag     — тег инбаунда
-#   type    — socks | http
+#   type    — socks, http или mixed
 #   port    — порт, который указывает приложение
 #   servers — список тегов серверов из links.txt (только эти).
 #             Если servers пуст/опущен — пул auto-select (все, кроме exclude_from_auto)

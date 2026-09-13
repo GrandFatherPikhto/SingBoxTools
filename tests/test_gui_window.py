@@ -331,3 +331,30 @@ def test_close_event_asks_when_dirty(main_window):
     event2 = QCloseEvent()
     main_window.closeEvent(event2)
     assert event2.isAccepted() is True
+
+
+# ---------------------------------------------------------------------------
+# mixed inbound
+# ---------------------------------------------------------------------------
+
+def test_proxy_editor_type_combo_lists_backend_types(main_window):
+    """Комбобокс берёт список из ALLOWED_PROXY_TYPES — защита от возврата хардкода."""
+    from generator._backend import sbm
+
+    combo = main_window.page_proxy.type_combo
+    values = [combo.itemText(i) for i in range(combo.count())]
+
+    assert values == list(sbm.ALLOWED_PROXY_TYPES)
+    assert "mixed" in values
+
+
+def test_proxy_form_apply_accepts_mixed(main_window):
+    main_window.new_project(skip_confirm=True)
+    main_window.model.add_proxy("main", "socks", 54321)
+    main_window.reload_tags()
+    main_window.refresh_tree()
+    main_window.select_key("proxy:main")
+
+    main_window.page_proxy.type_combo.setCurrentText("mixed")
+    assert main_window.page_proxy.apply() is True
+    assert main_window.model.get_proxy("main")["type"] == "mixed"

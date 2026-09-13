@@ -185,6 +185,13 @@ def test_validate_proxies_valid(manager):
     ]
 
 
+def test_validate_proxies_accepts_mixed_type(manager):
+    """mixed — легальный тип инбаунда (SOCKS и HTTP на одном порту)."""
+    result = manager.validate_proxies([_proxy(type="mixed")])
+
+    assert result == [{"tag": "main-socks", "type": "mixed", "port": 54321, "servers": []}]
+
+
 def test_validate_proxies_servers_string_is_normalized_to_list(manager):
     result = manager.validate_proxies([_proxy(servers=FI_TAG)])
 
@@ -276,6 +283,17 @@ def test_build_inbounds(manager):
         {"type": "http", "tag": "apps-http", "listen": "10.95.2.1", "listen_port": 54323},
     ]
     assert tags == ["main-socks", "apps-http"]
+
+
+def test_build_inbounds_mixed(manager):
+    """mixed-инбаунд уходит в config.json с тем же набором listen-полей."""
+    proxies = manager.validate_proxies([_proxy(type="mixed")])
+    inbounds, tags = manager.build_inbounds(proxies, "10.95.2.1")
+
+    assert inbounds == [
+        {"type": "mixed", "tag": "main-socks", "listen": "10.95.2.1", "listen_port": 54321},
+    ]
+    assert tags == ["main-socks"]
 
 
 def test_build_pools_creates_urltest_pool(manager):
@@ -596,7 +614,7 @@ def test_merged_module_keeps_original_names(manager, name):
 
 def test_merged_module_keeps_constants(manager):
     assert manager.DEFAULT_SETTINGS == "settings.yaml"
-    assert manager.ALLOWED_PROXY_TYPES == ("socks", "http")
+    assert manager.ALLOWED_PROXY_TYPES == ("socks", "http", "mixed")
     assert manager.DEFAULT_EXCLUDE == ["🇷🇺"]
     assert issubclass(manager.ConfigError, Exception)
 

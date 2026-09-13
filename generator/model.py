@@ -61,7 +61,7 @@ dns:
   rules: []
   final: dns-local
 
-# Прокси для приложений: каждый = отдельный inbound (socks/http)
+# Прокси для приложений: каждый = отдельный inbound (socks, http или mixed)
 proxies: []
 
 # Доменные маршруты поверх прокси

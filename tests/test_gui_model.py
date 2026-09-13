@@ -302,6 +302,12 @@ def test_validate_proxy_candidate_accepts_valid_new():
     assert validate_proxy_candidate(PROXIES, candidate, current_tag=None) is None
 
 
+def test_validate_proxy_candidate_accepts_mixed():
+    """mixed разрешён наравне с socks/http — правило берётся из бэкенда."""
+    candidate = {"tag": "fresh", "type": "mixed", "port": 56000, "servers": []}
+    assert validate_proxy_candidate(PROXIES, candidate, current_tag=None) is None
+
+
 # ---------------------------------------------------------------------------
 # format_stats
 # ---------------------------------------------------------------------------
@@ -317,3 +323,18 @@ def test_format_stats_mentions_output_and_counts():
     assert "Серверов: 3" in text
     assert "[SOCKS] main" in text
     assert "auto-select" in text
+
+
+def test_gui_model_mixed_proxy_and_stats_label(gui_model):
+    """mixed-прокси из модели попадает в сводку как [MIXED] <tag>."""
+    gui_model.new()
+    entry = gui_model.add_proxy("mixed-test", "mixed", 54398)
+
+    assert entry["type"] == "mixed"
+    assert gui_model.proxy_tags() == ["mixed-test"]
+
+    stats = {"servers": 1, "inbounds": 1, "pools": 0, "auto_count": 1,
+             "excluded": [], "listen_ip": "127.0.0.1",
+             "proxies": [{"tag": "mixed-test", "type": "mixed", "port": 54398,
+                          "servers": []}]}
+    assert "[MIXED] mixed-test" in format_stats("/tmp/config.json", stats)
