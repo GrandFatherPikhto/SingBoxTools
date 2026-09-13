@@ -1,0 +1,95 @@
+# settings.example.yaml — образец настроек для generate_config.py.
+#
+# Скопируйте под рабочим именем и поправьте под себя:
+#     cp settings.example.yaml settings.yaml
+#
+# Рабочий settings.yaml намеренно не отслеживается git (см. .gitignore): в нём
+# оказываются адреса вашей сети и теги серверов подписки. Правьте копию.
+#
+# Относительные пути (links_file, output_file) резолвятся от папки этого файла.
+# Полное описание всех ключей — docs/settings.md.
+
+# IP, на котором слушают прокси-инбаунды.
+# 127.0.0.1 — только своя машина; адрес в локальной сети или 0.0.0.0 —
+# доступ с других устройств (на роутере обычно так и нужно).
+listen_ip: 127.0.0.1
+
+# Файл с VLESS-ссылками, по одной на строку (выгрузка подписки).
+links_file: links.txt
+
+# Куда сохранять итоговый конфиг sing-box.
+output_file: config.json
+
+# Префиксы тегов, которые НЕ попадают в пул auto-select, но остаются
+# доступны как отдельные серверы (например, флаг страны).
+exclude_from_auto:
+- "🇷🇺"
+
+# Параметры urltest-пулов (auto-select и pool-<tag>).
+urltest:
+  url: "https://gstatic.com"
+  interval: "3m"
+  tolerance: 50
+
+# Секция log итогового конфига.
+log:
+  level: info
+  timestamp: true
+
+# Секция dns итогового конфига.
+# Правила (dns.rules) здесь не используются: всё идёт в final.
+# final: dns-local — резолвим локально; поставьте dns-remote, чтобы DNS шёл
+# через туннель.
+dns:
+  servers:
+  - type: https
+    tag: dns-remote
+    server: "1.1.1.1"
+    path: "/dns-query"
+    detour: auto-select
+  - type: local
+    tag: dns-local
+  rules: []
+  final: dns-local
+
+# Прокси для приложений: каждый = отдельный inbound со своим пулом серверов.
+#   tag     — тег инбаунда
+#   type    — socks, http или mixed (mixed = один порт и для SOCKS, и для HTTP)
+#   port    — порт, который указывает приложение
+#   servers — теги серверов из links_file (только эти).
+#             Если servers пуст или опущен — используется пул auto-select
+#             (все серверы, кроме отсечённых exclude_from_auto).
+proxies:
+# Основной прокси без привязки к серверам: работает через auto-select.
+- tag: main-mixed
+  type: mixed
+  port: 54321
+
+# Прокси, закреплённый за своим пулом из двух нод.
+- tag: apps-socks
+  type: socks
+  port: 54322
+  servers:
+  - "🇫🇮 Finland - Helsinki 1"
+  - "🇳🇱 Netherlands - Amsterdam"
+
+# Прокси под одно приложение, жёстко привязанный к одной ноде.
+- tag: app-http
+  type: http
+  port: 54323
+  servers:
+  - "🇫🇮 Finland - Helsinki 1"
+
+# Доменные маршруты поверх прокси (domain_suffix -> outbound).
+# outbound может быть тегом сервера, тегом пула (pool-<tag>), auto-select или direct.
+routes:
+  example:
+    outbound: "🇫🇮 Finland - Helsinki 1"
+    domains:
+    - example.com
+    - example.org
+  video:
+    outbound: auto-select
+    domains:
+    - youtube.com
+    - googlevideo.com

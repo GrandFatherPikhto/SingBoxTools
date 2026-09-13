@@ -27,6 +27,7 @@
 | [`gui.py`](../gui.py:1) | единая точка входа Qt6-GUI (PyQt6) для правки `settings.yaml` |
 | [`generator/`](../generator/__init__.py:1) | библиотека GUI: Qt-независимая модель, формы-виджеты, главное окно |
 | [`python/sing-box/tests/`](../tests/test_sing_box_manager.py:1) | pytest-набор: бэкенд (128 проверок) + GUI через pytest-qt, без сети/root/sing-box/дисплея |
+| [`settings.example.yaml`](../settings.example.yaml:1) | образец настроек: `cp settings.example.yaml settings.yaml` и правьте под себя (рабочий `settings.yaml` не в git) |
 | [`python/sing-box/docs/settings.md`](settings.md:1) | справочник по всем полям `settings.yaml` |
 | [`python/sing-box/docs/gui.md`](gui.md:1) | Qt6-GUI: структура `generator/`, меню, дерево, тесты |
 | [`python/generate_config.py`](../../generate_config.py:1) | тонкий шим: прежняя команда продолжает работать, но всегда в режиме генерации |
