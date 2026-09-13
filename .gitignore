@@ -49,8 +49,8 @@ desktop.ini
 *.swp
 *~
 
-sing-box/**
-etc/**
+sing-box/
+etc/
 
 # Конфигурации не сохраняем
 *.yaml
