@@ -17,6 +17,8 @@ from PyQt6.QtGui import QCloseEvent
 
 from conftest import DEFAULT_LINKS, DEFAULT_SETTINGS, FI_TAG, NL_TAG
 from generator.main_window import ROLE_KEY
+from generator.model import to_plain
+from generator.widgets import DnsEditorPage
 
 
 @pytest.fixture
@@ -414,7 +416,9 @@ def test_tree_slot_reports_error_instead_of_crashing(main_window, fixture_settin
     def boom():
         raise RuntimeError("dns сломан")
 
-    main_window.model.dns_values = boom   # подменяем метод экземпляра
+    # _on_tree_current ходит за DNS именно в сырой аксессор (см. d5389c8-регресс
+    # в test_gui_model.py); подменяем метод экземпляра на тот, который зовётся.
+    main_window.model.dns_section_raw = boom
 
     main_window.select_key("dns")         # дергает currentItemChanged → слот
 
@@ -422,3 +426,102 @@ def test_tree_slot_reports_error_instead_of_crashing(main_window, fixture_settin
     assert "DNS" in errors[0]
     assert "dns сломан" in errors[0]
     assert main_window.stack.currentWidget() is not main_window.page_dns
+
+
+# ---------------------------------------------------------------------------
+# Честный round-trip секции dns: кавычки и комментарии переживают сохранение
+# ---------------------------------------------------------------------------
+
+def test_window_dns_apply_then_save_leaves_file_byte_identical(
+        roundtrip_window, fixture_settings_path, tmp_path):
+    """Критерий приёмки: открыть DNS → «Применить» → сохранить = пустой diff.
+
+    Раньше этот же цикл вырезал у закавыченных скаляров ``"1.1.1.1"`` /
+    ``"/dns-query"`` кавычки и стирал комментарий перед вторым элементом
+    серверов, то есть файл менялся от одного открытия страницы.
+    """
+    window = roundtrip_window
+
+    window.select_key("dns")
+    assert window.stack.currentWidget() is window.page_dns
+    assert '"1.1.1.1"' in window.page_dns.servers_edit.toPlainText()
+    assert window.page_dns.apply() is True
+
+    target = tmp_path / "settings.yaml"
+    window.model.path = target
+    window.model.save()
+
+    assert target.read_text(encoding="utf-8") == \
+        fixture_settings_path.read_text(encoding="utf-8")
+
+
+def _dns_page(qtbot, model):
+    page = DnsEditorPage(model)
+    qtbot.addWidget(page)
+    return page
+
+
+def test_dns_editor_keeps_comment_typed_in_field(qtbot, gui_model, tmp_path):
+    """Комментарий, набранный прямо в поле редактора, доживает до файла.
+
+    PyYAML-путь рубил его молча: ``# основной`` не является частью данных и в
+    builtin-типах не существует. Через ruamel комментарий держится на узле.
+    """
+    gui_model.new()
+    page = _dns_page(qtbot, gui_model)
+    page.load_dns(gui_model.dns_section_raw())
+
+    page.servers_edit.setPlainText(
+        "- type: local\n  tag: dns-local   # основной\n")
+    assert page.apply() is True
+
+    target = tmp_path / "settings.yaml"
+    gui_model.path = target
+    gui_model.save()
+    assert "# основной" in target.read_text(encoding="utf-8")
+
+
+def test_dns_editor_broken_yaml_reports_and_keeps_model(qtbot, gui_model):
+    """Битый YAML: apply() → False, сигнал есть, модель не тронута."""
+    gui_model.new()
+    before = to_plain(gui_model.dns_section_raw()["servers"])
+
+    page = _dns_page(qtbot, gui_model)
+    page.load_dns(gui_model.dns_section_raw())
+    failed = []
+    page.validation_failed.connect(failed.append)
+
+    page.servers_edit.setPlainText("key: [unclosed")
+    assert page.apply() is False
+
+    assert failed, "ожидался сигнал validation_failed"
+    assert failed[0].startswith("dns.servers: некорректный YAML")
+    # модель осталась прежней, а не затёртой наполовину собранными значениями
+    after = gui_model.dns_section_raw()
+    assert to_plain(after["servers"]) == before == []
+    assert after["final"] == "dns-local"
+
+
+def test_dns_editor_rejects_non_list_top_level(qtbot, gui_model):
+    """``a: 1`` — это CommentedMap, а не список: по-прежнему ошибка ввода."""
+    gui_model.new()
+    page = _dns_page(qtbot, gui_model)
+    page.load_dns(gui_model.dns_section_raw())
+    failed = []
+    page.validation_failed.connect(failed.append)
+
+    page.rules_edit.setPlainText("a: 1")
+    assert page.apply() is False
+
+    assert failed == ["dns.rules: ожидается YAML-список"]
+
+
+def test_dns_editor_empty_field_means_empty_list(qtbot, gui_model):
+    """Пустое поле (None из load("")) — пустой список, а не ошибка."""
+    gui_model.new()
+    page = _dns_page(qtbot, gui_model)
+    page.load_dns(gui_model.dns_section_raw())
+
+    page.servers_edit.setPlainText("")
+    assert page.apply() is True
+    assert to_plain(gui_model.dns_section_raw()["servers"]) == []

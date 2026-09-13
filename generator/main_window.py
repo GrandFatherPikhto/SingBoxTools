@@ -228,7 +228,9 @@ class MainWindow(QMainWindow):
                 self.page_general.load_general(self.model.general_values())
                 self.stack.setCurrentWidget(self.page_general)
             elif kind == "dns":
-                self.page_dns.load_dns(self.model.dns_values())
+                # dns_section_raw (не dns_values): редактор печатает поддерево
+                # ruamel-ом, иначе кавычки/комментарии теряются при сохранении.
+                self.page_dns.load_dns(self.model.dns_section_raw())
                 self.stack.setCurrentWidget(self.page_dns)
             elif kind == "proxies":
                 self.stack.setCurrentWidget(self.page_proxies_hint)

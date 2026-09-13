@@ -442,3 +442,37 @@ def test_dump_yaml_normalizes_raw_ruamel_input():
 
     text = _dump_yaml(servers)
     assert "1.1.1.1" in text
+
+
+# ---------------------------------------------------------------------------
+# Два аксессора dns: безопасный dns_values() и сырой dns_section_raw()
+# ---------------------------------------------------------------------------
+
+def test_dns_section_raw_keeps_quotes_for_ruamel_editor(roundtrip_model):
+    """Сырой аксессор отдаёт ruamel-узлы — кавычки живы до самого редактора.
+
+    Это ровно то, чего не может dns_values(): его контракт — builtin-типы, а в
+    них информация о стиле скаляра (``DoubleQuotedScalarString``) не помещается.
+    """
+    from generator.widgets import _dump_yaml_rt
+
+    raw = roundtrip_model.dns_section_raw()
+    raw_text = _dump_yaml_rt(raw["servers"])
+    assert '"1.1.1.1"' in raw_text
+    assert '"/dns-query"' in raw_text
+
+    # контраст: безопасный путь стиль теряет (и это ожидаемо, см. d5389c8)
+    plain_text = _dump_yaml(roundtrip_model.dns_values()["servers"])
+    assert '"1.1.1.1"' not in plain_text
+    assert "1.1.1.1" in plain_text
+
+
+def test_dns_section_raw_is_safe_for_missing_and_empty_sections(gui_model):
+    """Нет/пустая секция dns — аксессор отдаёт пустые списки, а не None."""
+    gui_model.new()
+    gui_model.data.pop("dns", None)
+
+    raw = gui_model.dns_section_raw()
+    assert raw["servers"] == []
+    assert raw["rules"] == []
+    assert raw["final"] == ""

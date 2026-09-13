@@ -11,6 +11,8 @@
 """
 from __future__ import annotations
 
+import io
+
 import yaml
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
@@ -30,7 +32,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ._backend import sbm
-from .model import to_plain
+from .model import new_yaml_rt, to_plain
 from .validation import validate_non_empty, validate_proxy_candidate
 
 
@@ -299,6 +301,9 @@ class DnsEditorPage(QWidget):
     def __init__(self, model, parent=None):
         super().__init__(parent)
         self.model = model
+        # Тот же набор настроек ruamel, что у бэкенда (preserve_quotes и т.п.),
+        # а не третий набор: иначе стиль скаляров разъедется с settings.yaml.
+        self.yaml_rt = new_yaml_rt()
 
         self.final_edit = QLineEdit()
         self.servers_edit = QPlainTextEdit()
@@ -321,16 +326,21 @@ class DnsEditorPage(QWidget):
         layout.addWidget(self.apply_btn)
 
     def load_dns(self, dns):
+        """Заполняет форму; ``dns`` — сырые ruamel-узлы из dns_section_raw()."""
         dns = dns or {}
         self.final_edit.setText(dns.get("final") or "")
-        self.servers_edit.setPlainText(_dump_yaml(dns.get("servers") or []))
-        self.rules_edit.setPlainText(_dump_yaml(dns.get("rules") or []))
+        self.servers_edit.setPlainText(
+            _dump_yaml_rt(dns.get("servers") or [], self.yaml_rt))
+        self.rules_edit.setPlainText(
+            _dump_yaml_rt(dns.get("rules") or [], self.yaml_rt))
 
     def collect(self):
         return {
             "final": self.final_edit.text().strip(),
-            "servers": _load_yaml_list(self.servers_edit.toPlainText(), "dns.servers"),
-            "rules": _load_yaml_list(self.rules_edit.toPlainText(), "dns.rules"),
+            "servers": _load_yaml_list(
+                self.servers_edit.toPlainText(), "dns.servers", self.yaml_rt),
+            "rules": _load_yaml_list(
+                self.rules_edit.toPlainText(), "dns.rules", self.yaml_rt),
         }
 
     def apply(self):
@@ -548,13 +558,38 @@ def _dump_yaml(value):
     return yaml.safe_dump(to_plain(value), allow_unicode=True, sort_keys=False).strip()
 
 
-def _load_yaml_list(text, where):
+def _dump_yaml_rt(value, yaml_rt=None):
+    """ruamel-представление поддерева: кавычки и комментарии остаются на месте.
+
+    Отличие от ``_dump_yaml``: там PyYAML и только builtin-типы (безопасный
+    дефолт), здесь — сырые ruamel-узлы (``CommentedSeq``,
+    ``DoubleQuotedScalarString``), которые PyYAML не переваривает. Поэтому и
+    дампер берём ruamel-овский.
+    """
+    if yaml_rt is None:
+        yaml_rt = new_yaml_rt()
+    buf = io.StringIO()
+    yaml_rt.dump(value, buf)
+    return buf.getvalue().strip()
+
+
+def _load_yaml_list(text, where, yaml_rt=None):
+    """ruamel-разбор YAML-списка: стиль скаляров и комментарии не теряются.
+
+    ``None`` (пустое поле) и пустая строка → пустой список, как и раньше;
+    не-список на верхнем уровне — по-прежнему ошибка ввода.
+    """
     text = (text or "").strip()
     if not text:
         return []
+    if yaml_rt is None:
+        yaml_rt = new_yaml_rt()
+    # Ленивый импорт: ruamel может отсутствовать, а require_ruamel() внутри
+    # new_yaml_rt() уже сказал бы об этом понятным текстом.
+    from ruamel.yaml.error import YAMLError
     try:
-        value = yaml.safe_load(text)
-    except yaml.YAMLError as e:
+        value = yaml_rt.load(text)
+    except YAMLError as e:
         raise ValueError(f"{where}: некорректный YAML — {e}")
     if value is None:
         return []

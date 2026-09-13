@@ -451,6 +451,25 @@ class ProjectModel:
             "final": to_plain(dns.get("final", "")),
         }
 
+    def dns_section_raw(self):
+        """Сырые ruamel-узлы секции dns — только для ruamel-сериализации.
+
+        ВНИМАНИЕ: возвращает ``CommentedSeq``/``CommentedMap``/
+        ``DoubleQuotedScalarString``. Скармливать результат PyYAML
+        (``yaml.safe_dump``) нельзя — он падает в ``represent_undefined``
+        (регресс ``d5389c8``). Единственный разрешённый потребитель — редактор
+        DNS: он печатает поддерево тем же ruamel-дампером (``new_yaml_rt``), и
+        только так кавычки и пользовательские комментарии переживают цикл
+        «открыл → применил → сохранил». Нужны безопасные builtin-типы — берите
+        :meth:`dns_values`.
+        """
+        dns = self.data.get("dns") if isinstance(self.data.get("dns"), dict) else {}
+        return {
+            "servers": dns.get("servers") if dns.get("servers") is not None else [],
+            "rules": dns.get("rules") if dns.get("rules") is not None else [],
+            "final": dns.get("final", ""),
+        }
+
     def apply_dns(self, servers, rules, final):
         if not isinstance(self.data.get("dns"), dict):
             self.data["dns"] = {}
