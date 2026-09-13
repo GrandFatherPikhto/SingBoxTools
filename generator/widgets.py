@@ -30,6 +30,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ._backend import sbm
+from .model import to_plain
 from .validation import validate_non_empty, validate_proxy_candidate
 
 
@@ -537,7 +538,14 @@ def _buttons(*widgets):
 
 
 def _dump_yaml(value):
-    return yaml.safe_dump(value, allow_unicode=True, sort_keys=False).strip()
+    """PyYAML-представление значения в безопасных builtin-типах.
+
+    ``_dump_yaml`` — единственная точка в GUI, где PyYAML что-то сериализует.
+    Через ``to_plain`` она не падает на ruamel-объектах (``CommentedMap``,
+    ``CommentedSeq``, ``DoubleQuotedScalarString``), кто бы что в неё ни передал.
+    Нормализуем вход, а не прячем ошибку: пустое поле молча стёрло бы секцию.
+    """
+    return yaml.safe_dump(to_plain(value), allow_unicode=True, sort_keys=False).strip()
 
 
 def _load_yaml_list(text, where):

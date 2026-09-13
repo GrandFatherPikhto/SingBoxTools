@@ -9,6 +9,7 @@ settings.yaml.
 from __future__ import annotations
 
 from ._backend import sbm
+from .model import to_plain
 
 
 def as_plain_proxy(proxy):
@@ -21,12 +22,15 @@ def as_plain_proxy(proxy):
         servers = [servers]
     else:
         servers = list(servers)
-    return {
+    # to_plain схлопывает DoubleQuotedScalarString/CommentedMap-подклассы до
+    # настоящих str/dict; поведение валидации (только isinstance-проверки) не
+    # меняется — меняются лишь типы.
+    return to_plain({
         "tag": proxy.get("tag"),
         "type": proxy.get("type"),
         "port": proxy.get("port"),
         "servers": servers,
-    }
+    })
 
 
 def validate_proxy_candidate(proxies, candidate, current_tag=None):

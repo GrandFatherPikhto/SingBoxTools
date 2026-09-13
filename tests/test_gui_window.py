@@ -358,3 +358,67 @@ def test_proxy_form_apply_accepts_mixed(main_window):
     main_window.page_proxy.type_combo.setCurrentText("mixed")
     assert main_window.page_proxy.apply() is True
     assert main_window.model.get_proxy("main")["type"] == "mixed"
+
+
+# ---------------------------------------------------------------------------
+# Открытие всех страниц на проекте, загруженном ruamel round-trip'ом
+# ---------------------------------------------------------------------------
+
+def test_roundtrip_project_opens_every_editor_page(roundtrip_window):
+    """Все узлы дерева открываются на настоящем (не литеральном) YAML.
+
+    Раньше ни один тест не грузил settings.yaml через ruamel, поэтому краш на
+    CommentedMap/CommentedSeq/DoubleQuotedScalarString не ловился. Здесь мы
+    проходим ровно по тем веткам _on_tree_current, по которым ходит приложение.
+    """
+    window = roundtrip_window
+
+    keys = ["links", "output", "general", "dns", "proxies", "routes",
+            "proxy:main-socks", "proxy:apps-http",
+            "route:telegram", "route:broken"]
+    for key in keys:
+        assert key in window._items_by_key, f"нет узла {key!r} в дереве"
+        window.select_key(key)
+        assert window.stack.currentWidget() is not None
+
+    # ошибок в слотах быть не должно, DNS-страница реально заполнена
+    assert window.errors == []
+    window.select_key("dns")
+    assert window.stack.currentWidget() is window.page_dns
+    assert "1.1.1.1" in window.page_dns.servers_edit.toPlainText()
+    assert window.page_dns.final_edit.text() == "dns-local"
+
+
+def test_roundtrip_proxy_page_shows_quoted_scalar_servers(roundtrip_window):
+    """Серверы прокси — закавыченные скаляры; страница не падает и видит их."""
+    window = roundtrip_window
+    window.select_key("proxy:apps-http")
+
+    assert window.stack.currentWidget() is window.page_proxy
+    servers = window.page_proxy.collect()["servers"]
+    assert "🇳🇱 Netherlands - Amsterdam" in servers
+    assert all(type(tag) is str for tag in servers)
+
+
+# ---------------------------------------------------------------------------
+# Слот _on_tree_current не роняет приложение
+# ---------------------------------------------------------------------------
+
+def test_tree_slot_reports_error_instead_of_crashing(main_window, fixture_settings_path):
+    """Исключение внутри Qt-слота должно уходить в _error, а не ронять процесс."""
+    main_window.open_path(fixture_settings_path)
+
+    errors = []
+    main_window._error = errors.append
+
+    def boom():
+        raise RuntimeError("dns сломан")
+
+    main_window.model.dns_values = boom   # подменяем метод экземпляра
+
+    main_window.select_key("dns")         # дергает currentItemChanged → слот
+
+    assert errors, "ожидалось сообщение об ошибке через _error"
+    assert "DNS" in errors[0]
+    assert "dns сломан" in errors[0]
+    assert main_window.stack.currentWidget() is not main_window.page_dns

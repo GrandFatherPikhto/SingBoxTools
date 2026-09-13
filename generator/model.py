@@ -90,6 +90,37 @@ def new_yaml_rt():
     return yaml_rt
 
 
+def to_plain(value):
+    """Рекурсивно нормализует дерево ruamel в чистые builtin-типы.
+
+    Round-trip загрузка (``new_yaml_rt``) отдаёт не встроенные типы, а
+    ``CommentedMap``/``CommentedSeq`` (подклассы ``dict``/``list``), а
+    ``preserve_quotes = True`` превращает закавыченные скаляры в
+    ``DoubleQuotedScalarString`` (подкласс ``str``). PyYAML подбирает
+    представитель по *точному* типу (``self.yaml_representers[type(data)]``),
+    поэтому на любом из этих подклассов ``yaml.safe_dump`` падает в
+    ``represent_undefined`` с обманчивым сообщением (объект печатается как
+    обычный dict, потому что ``CommentedMap`` наследует ``dict``).
+
+    Возвращает новое дерево из ``dict``/``list``/``str``/``int``/``float``/
+    ``bool``/``None``. Порядок ключей сохраняется; ``bool`` проверяется до
+    ``int`` (в Python ``bool`` — подкласс ``int``); всё остальное — как есть.
+    """
+    if isinstance(value, bool):
+        return bool(value)
+    if isinstance(value, dict):
+        return {to_plain(key): to_plain(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [to_plain(item) for item in value]
+    if isinstance(value, str):
+        return str(value)
+    if isinstance(value, int):
+        return int(value)
+    if isinstance(value, float):
+        return float(value)
+    return value
+
+
 def _split_stale_where(where):
     """Восстанавливает (секция, имя) из строки place из find_stale_refs.
 
@@ -406,11 +437,18 @@ class ProjectModel:
         self.mark_dirty()
 
     def dns_values(self):
+        """Значения секции dns в чистых builtin-типах (без ruamel-объектов).
+
+        Наружу из модели не должны утекать ``CommentedMap``/``CommentedSeq``/
+        ``DoubleQuotedScalarString``: виджеты сериализуют их PyYAML-ом, а он
+        падает на подклассах. Нормализуем на границе — тогда любой будущий
+        получатель данных получает безопасные типы, а не только DnsEditorPage.
+        """
         dns = self.data.get("dns") if isinstance(self.data.get("dns"), dict) else {}
         return {
-            "servers": dns.get("servers") or [],
-            "rules": dns.get("rules") or [],
-            "final": dns.get("final", ""),
+            "servers": to_plain(dns.get("servers") or []),
+            "rules": to_plain(dns.get("rules") or []),
+            "final": to_plain(dns.get("final", "")),
         }
 
     def apply_dns(self, servers, rules, final):

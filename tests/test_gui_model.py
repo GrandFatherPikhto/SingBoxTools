@@ -10,8 +10,9 @@ import pytest
 import sing_box_manager as sbm
 
 from conftest import FI_TAG, FIXTURE_SETTINGS, NL_TAG, STALE_TAG
-from generator.model import ProjectModel, format_stats
+from generator.model import ProjectModel, format_stats, new_yaml_rt, to_plain
 from generator.validation import validate_proxy_candidate
+from generator.widgets import _dump_yaml
 
 
 # ---------------------------------------------------------------------------
@@ -338,3 +339,106 @@ def test_gui_model_mixed_proxy_and_stats_label(gui_model):
              "proxies": [{"tag": "mixed-test", "type": "mixed", "port": 54398,
                           "servers": []}]}
     assert "[MIXED] mixed-test" in format_stats("/tmp/config.json", stats)
+
+
+# ---------------------------------------------------------------------------
+# to_plain: нормализация ruamel-объектов
+# ---------------------------------------------------------------------------
+
+def test_to_plain_collapses_containers_and_scalar_subclasses():
+    """CommentedMap/CommentedSeq/DoubleQuotedScalarString → чистые builtin.
+
+    Проверяем именно ``type(...) is ...`` (а не isinstance): подкласс проходит
+    isinstance, но PyYAML ищет представитель по точному типу и на подклассе падает.
+    """
+    from ruamel.yaml.comments import CommentedMap, CommentedSeq
+    from ruamel.yaml.scalarstring import DoubleQuotedScalarString
+
+    data = new_yaml_rt().load(
+        'servers:\n'
+        '- type: https\n'
+        '  server: "1.1.1.1"\n'
+        '  meta:\n'
+        '    nested:\n'
+        '    - "a"\n'
+        '    - "b"\n'
+    )
+    # предпосылка: ruamel реально отдаёт подклассы
+    assert isinstance(data, CommentedMap)
+    assert isinstance(data["servers"], CommentedSeq)
+    assert isinstance(data["servers"][0]["server"], DoubleQuotedScalarString)
+
+    plain = to_plain(data)
+    assert type(plain) is dict
+    assert type(plain["servers"]) is list
+    assert type(plain["servers"][0]) is dict
+    assert type(plain["servers"][0]["server"]) is str
+    assert plain["servers"][0]["server"] == "1.1.1.1"
+    # вложенность в несколько уровней
+    nested = plain["servers"][0]["meta"]["nested"]
+    assert type(nested) is list
+    assert nested == ["a", "b"]
+    assert all(type(item) is str for item in nested)
+
+
+def test_to_plain_preserves_key_order():
+    data = new_yaml_rt().load("z: 1\na: 2\nm: 3\n")
+    assert list(to_plain(data)) == ["z", "a", "m"]
+
+
+def test_to_plain_keeps_bool_and_normalizes_numeric_subclasses():
+    """bool проверяется до int (bool — подкласс int) и остаётся bool."""
+    from ruamel.yaml.scalarint import ScalarInt
+
+    data = new_yaml_rt().load("flag: true\noff: false\ncount: 3\n")
+    # ScalarInt — подкласс int, как и всё, что ruamel кладёт в число
+    assert issubclass(ScalarInt, int)
+    plain = to_plain({"flag": data["flag"], "off": data["off"], "count": data["count"]})
+
+    assert type(plain["flag"]) is bool and plain["flag"] is True
+    assert type(plain["off"]) is bool and plain["off"] is False
+    assert type(plain["count"]) is int
+    assert not isinstance(plain["count"], bool)
+
+
+def test_to_plain_passes_through_none_and_unknown_objects():
+    marker = object()
+    assert to_plain(None) is None
+    assert to_plain(marker) is marker
+
+
+# ---------------------------------------------------------------------------
+# Регресс: dns_values() + _dump_yaml на реальной round-trip загрузке
+# ---------------------------------------------------------------------------
+
+def test_dns_values_roundtrip_is_plain_and_dumpable(roundtrip_model):
+    """Тот самый краш: ruamel-объекты из модели уходили в yaml.safe_dump.
+
+    На фикстуре с закавыченными скалярами (dns.servers[1]) dns_values() обязан
+    отдавать чистые dict/list/str, а _dump_yaml — отрабатывать без исключения.
+    """
+    dns = roundtrip_model.dns_values()
+
+    assert type(dns["servers"]) is list
+    assert dns["servers"], "фикстура должна содержать хотя бы один dns-сервер"
+    assert type(dns["servers"][0]) is dict
+    assert type(dns["servers"][1]["server"]) is str
+    assert type(dns["final"]) is str
+
+    text = _dump_yaml(dns["servers"])
+    assert text.strip()
+    assert "1.1.1.1" in text
+    assert "dns-remote" in text
+    assert _dump_yaml(dns["rules"]).strip() == "[]"
+
+
+def test_dump_yaml_normalizes_raw_ruamel_input():
+    """Второй пояс: _dump_yaml не падает, даже если ему дали ruamel как есть."""
+    servers = new_yaml_rt().load(
+        'servers:\n'
+        '- type: https\n'
+        '  server: "1.1.1.1"\n'
+    )["servers"]
+
+    text = _dump_yaml(servers)
+    assert "1.1.1.1" in text

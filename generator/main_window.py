@@ -211,35 +211,42 @@ class MainWindow(QMainWindow):
             return
         kind = current.data(0, ROLE_KIND)
         name = current.data(0, ROLE_NAME)
+        node_title = current.text(0)
 
-        if kind == "links":
-            self.page_links.load()
-            self.page_links.show_tags(self._all_tags, self._links_error)
-            self.stack.setCurrentWidget(self.page_links)
-        elif kind == "output":
-            self.page_output.load()
-            self.stack.setCurrentWidget(self.page_output)
-        elif kind == "general":
-            self.page_general.load_general(self.model.general_values())
-            self.stack.setCurrentWidget(self.page_general)
-        elif kind == "dns":
-            self.page_dns.load_dns(self.model.dns_values())
-            self.stack.setCurrentWidget(self.page_dns)
-        elif kind == "proxies":
-            self.stack.setCurrentWidget(self.page_proxies_hint)
-        elif kind == "routes":
-            self.stack.setCurrentWidget(self.page_routes_hint)
-        elif kind == "proxy":
-            proxy = self.model.get_proxy(name)
-            if proxy is not None:
-                self.page_proxy.load_proxy(proxy, self._all_tags)
-                self.stack.setCurrentWidget(self.page_proxy)
-        elif kind == "route":
-            route = self.model.get_route(name)
-            if route is not None:
-                self.page_route.load_route(
-                    name, route, self._all_tags, self.model.proxy_tags())
-                self.stack.setCurrentWidget(self.page_route)
+        # Любое исключение внутри Qt-слота роняет весь процесс (core dumped),
+        # поэтому показываем его пользователю вместо падения приложения.
+        # Ловим именно Exception (не BaseException).
+        try:
+            if kind == "links":
+                self.page_links.load()
+                self.page_links.show_tags(self._all_tags, self._links_error)
+                self.stack.setCurrentWidget(self.page_links)
+            elif kind == "output":
+                self.page_output.load()
+                self.stack.setCurrentWidget(self.page_output)
+            elif kind == "general":
+                self.page_general.load_general(self.model.general_values())
+                self.stack.setCurrentWidget(self.page_general)
+            elif kind == "dns":
+                self.page_dns.load_dns(self.model.dns_values())
+                self.stack.setCurrentWidget(self.page_dns)
+            elif kind == "proxies":
+                self.stack.setCurrentWidget(self.page_proxies_hint)
+            elif kind == "routes":
+                self.stack.setCurrentWidget(self.page_routes_hint)
+            elif kind == "proxy":
+                proxy = self.model.get_proxy(name)
+                if proxy is not None:
+                    self.page_proxy.load_proxy(proxy, self._all_tags)
+                    self.stack.setCurrentWidget(self.page_proxy)
+            elif kind == "route":
+                route = self.model.get_route(name)
+                if route is not None:
+                    self.page_route.load_route(
+                        name, route, self._all_tags, self.model.proxy_tags())
+                    self.stack.setCurrentWidget(self.page_route)
+        except Exception as e:
+            self._error(f"Не удалось открыть узел «{node_title}»: {e}")
 
     # ------------------------------------------------------------------
     # Контекстное меню

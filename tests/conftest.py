@@ -213,6 +213,22 @@ def gui_model():
 
 
 @pytest.fixture
+def roundtrip_model():
+    """Модель, загруженная из tests/fixtures/settings.yaml через ruamel round-trip.
+
+    В отличие от ``gui_model`` (пустой скелет из литералов), здесь в ``data``
+    лежат настоящие ``CommentedMap``/``CommentedSeq``/``DoubleQuotedScalarString``
+    — ровно те объекты, на которых PyYAML падал в ``represent_undefined``. Это
+    путь живого приложения, который раньше не покрывался ни одним тестом.
+    """
+    from generator.model import ProjectModel
+
+    model = ProjectModel()
+    model.open(FIXTURE_SETTINGS)
+    return model
+
+
+@pytest.fixture
 def main_window(qtbot):
     """MainWindow с заглушёнными модальными диалогами."""
     from generator.main_window import MainWindow
@@ -222,4 +238,23 @@ def main_window(qtbot):
     window._info = lambda message: None
     window._error = lambda message: None
     window._ask_save_discard_cancel = lambda: "discard"
+    return window
+
+
+@pytest.fixture
+def roundtrip_window(qtbot):
+    """MainWindow, открытое на tests/fixtures/settings.yaml (реальная загрузка).
+
+    Диалоги заглушены; ошибки, показанные ``_error``, складываются в
+    ``window.errors`` для проверки из тестов.
+    """
+    from generator.main_window import MainWindow
+
+    window = MainWindow()
+    qtbot.addWidget(window)
+    window.errors = []
+    window._info = lambda message: None
+    window._error = window.errors.append
+    window._ask_save_discard_cancel = lambda: "discard"
+    assert window.open_path(FIXTURE_SETTINGS) is True
     return window

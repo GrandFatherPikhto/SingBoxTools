@@ -23,6 +23,13 @@ dns:
   servers:
   - type: local
     tag: dns-local
+  # Сервер в форме рабочего конфига: закавыченные скаляры дают
+  # DoubleQuotedScalarString — именно на них PyYAML падал в represent_undefined.
+  - type: https
+    tag: dns-remote
+    server: "1.1.1.1"
+    path: "/dns-query"
+    detour: auto-select
   rules: []
   final: dns-local
 
