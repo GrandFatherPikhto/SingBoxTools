@@ -1,0 +1,51 @@
+# tests/fixtures/settings.yaml — образец рабочего проекта для GUI-тестов.
+# ВАЖНО: этот комментарий проверяется тестом round-trip (Save не должен его терять).
+
+listen_ip: 127.0.0.1
+
+links_file: links.txt
+output_file: config.json
+
+exclude_from_auto:
+- "🇷🇺"
+
+urltest:
+  url: "https://gstatic.com"
+  interval: "3m"
+  tolerance: 50
+
+log:
+  level: info
+  timestamp: true
+
+# секция dns
+dns:
+  servers:
+  - type: local
+    tag: dns-local
+  rules: []
+  final: dns-local
+
+proxies:
+- tag: main-socks
+  type: socks
+  port: 54321
+  servers:
+  - 🇫🇮 Finland - Helsinki 1
+- tag: apps-http
+  type: http
+  port: 54323
+  servers:
+  - 🇫🇮 Finland - Helsinki 1
+  - 🇳🇱 Netherlands - Amsterdam
+  - 🇩🇪 Germany - Berlin   # stale: нет в links.txt
+
+routes:
+  telegram:
+    outbound: 🇫🇮 Finland - Helsinki 1
+    domains:
+    - telegram.org
+  broken:
+    outbound: 🇩🇪 Germany - Berlin   # stale
+    domains:
+    - example.com
